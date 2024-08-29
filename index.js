@@ -1,82 +1,90 @@
-const { Web3 } = require('web3');
+const { Web3 } = require("web3");
 
 require("dotenv").config();
-const key = process.env.INFURA_API_KEY
+const key = process.env.INFURA_API_KEY;
 // const web3 = new Web3(`https://mainnet.infura.io/v3/${key}`);
 const web3 = new Web3(`https://rpc.eth.testnet.creatachain.com/`);
 
-
-
-
-const ethereumModesOfTransaction=async()=>{
-    const sugguestedPriority = [1, 1.5, 2]
-    const arbitraryConstant = [1, 1.35, 1.70]
+const ethereumModesOfTransaction = async () => {
+    const sugguestedPriority = [1, 1.5, 2];
+    const arbitraryConstant = [1, 1.35, 1.7];
     return await web3.eth.getBlock("pending").then(async (block) => {
         const baseFeePerGas = +web3.utils.fromWei(block.baseFeePerGas, "gwei");
 
         const slow = sugguestedPriority[0] + baseFeePerGas * arbitraryConstant[0];
-        const average = sugguestedPriority[1] + baseFeePerGas * arbitraryConstant[1];
+        const average =
+            sugguestedPriority[1] + baseFeePerGas * arbitraryConstant[1];
         const fast = sugguestedPriority[2] + baseFeePerGas * arbitraryConstant[2];
         const EstimatedBaseFeePerGas = baseFeePerGas;
 
         return {
-            "low": {
-                "suggestedMaxPriorityFeePerGas": sugguestedPriority[0],
-                "suggestedMaxFeePerGas": slow,
-                "minWaitTimeEstimate": 15000,
-                "maxWaitTimeEstimate": 60000
+            low: {
+                suggestedMaxPriorityFeePerGas: sugguestedPriority[0],
+                suggestedMaxFeePerGas: slow,
+                minWaitTimeEstimate: 15000,
+                maxWaitTimeEstimate: 60000,
             },
-            "medium": {
-                "suggestedMaxPriorityFeePerGas": sugguestedPriority[1],
-                "suggestedMaxFeePerGas": average,
-                "minWaitTimeEstimate": 15000,
-                "maxWaitTimeEstimate": 45000
+            medium: {
+                suggestedMaxPriorityFeePerGas: sugguestedPriority[1],
+                suggestedMaxFeePerGas: average,
+                minWaitTimeEstimate: 15000,
+                maxWaitTimeEstimate: 45000,
             },
-            "high": {
-                "suggestedMaxPriorityFeePerGas": sugguestedPriority[2],
-                "suggestedMaxFeePerGas": fast,
-                "minWaitTimeEstimate": 15000,
-                "maxWaitTimeEstimate": 30000
+            high: {
+                suggestedMaxPriorityFeePerGas: sugguestedPriority[2],
+                suggestedMaxFeePerGas: fast,
+                minWaitTimeEstimate: 15000,
+                maxWaitTimeEstimate: 30000,
             },
-            "estimatedBaseFee": EstimatedBaseFeePerGas,
-            "networkCongestion": 0.96,
+            estimatedBaseFee: EstimatedBaseFeePerGas,
+            networkCongestion: 0.96,
         };
     });
-}
+};
 
 // ethereumModesOfTransaction().then((res)=>console.table(res))
- 
-
-
-
- 
 
 // Function to calculate network congestion
-async function calculateNetworkCongestion(web3, numBlocks = 500) {
-    const latestBlock = await web3.eth.getBlock('latest');
-    const latestBaseFee = Number(web3.utils.fromWei(latestBlock.baseFeePerGas, 'gwei'));
+async function calculateNetworkCongestion(numBlocks = 29) {
+    const feeHistory = await web3.eth.getFeeHistory(numBlocks, 'latest', [100]);
+    const historicalBaseFee = feeHistory.baseFeePerGas;
+    // console.log(historicalBaseFee);
+    let latestBaseFee = historicalBaseFee.at(numBlocks - 1);
+    latestBaseFee = +web3.utils.fromWei(latestBaseFee, 'gwei');
+    let maxBigInt = historicalBaseFee[0];
+    let minBigInt = historicalBaseFee[0];
 
-    let historicalBaseFees = [];
-
-    // Get base fees from previous blocks
-    for (let i = 1; i <= numBlocks; i++) {
-        const block = await web3.eth.getBlock(Number(latestBlock.number) - i);
-        const baseFee = Number(web3.utils.fromWei(block.baseFeePerGas, 'gwei'));
-        historicalBaseFees.push(baseFee);
+    for (const num of historicalBaseFee) {
+        if (num > maxBigInt) maxBigInt = num;
+        if (num < minBigInt) minBigInt = num;
     }
 
-    // Calculate historical range
-    const minHistoricalBaseFee = Math.min(...historicalBaseFees);
-    const maxHistoricalBaseFee = Math.max(...historicalBaseFees);
+    const maxHistoricalBaseFee = +web3.utils.fromWei(maxBigInt, 'gwei');
+    const minHistoricalBaseFee = +web3.utils.fromWei(minBigInt, 'gwei');
 
-    // Estimate congestion as a percentage where 100% is when the base fee is at its historical max
-    const congestion = ((latestBaseFee - minHistoricalBaseFee) / (maxHistoricalBaseFee - minHistoricalBaseFee)) ;
+    const congestion =
+        (latestBaseFee - minHistoricalBaseFee) /
+        (maxHistoricalBaseFee - minHistoricalBaseFee);
 
-    return congestion.toFixed(2); // Return as a percentage
+    console.log(latestBaseFee);
+
+    return congestion.toFixed(2);
 }
 
 // Usage example
-calculateNetworkCongestion(web3).then(congestion => {
-    console.log(`Network Congestion: ${congestion}`);
-}).catch(console.error);
+calculateNetworkCongestion()
+    .then((congestion) => {
+        console.log(`My Network Congestion: ${congestion}`);
+        fetch("https://gas.api.infura.io/v3/71583074c5c34727b3ec122ec0bea1e0/networks/11155111/suggestedGasFees")
+            .then((result) => result.json())
+            .then((result) => {
+                console.log(+result.estimatedBaseFee);
+                console.log(`Infura Network Congestion: ${result.networkCongestion}`);
+            });
+    })
+    .catch(console.error);
 
+
+
+
+ 
